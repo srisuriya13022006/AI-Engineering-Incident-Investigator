@@ -1,0 +1,21 @@
+services:
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: mai_falkordb
+    ports:
+      # Bound strictly to localhost for secure development
+      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - falkordb_data:/var/lib/falkordb/data
+    environment:
+      - REDIS_ARGS=--save 60 1 --save 300 10 --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  falkordb_data:

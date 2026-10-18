@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mai Incident Investigator — Engineering Incident & Evidence Reasoning</title>
+  <meta name="description" content="Production-grade engineering incident investigation workspace connecting historical incidents, GitHub records, fix outcomes, and agent reasoning powered by FalkorDB.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/cytoscape.min.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Compact Left Sidebar Navigation -->
+    <aside class="app-sidebar" aria-label="Main Navigation">
+      <div class="sidebar-brand">
+        <div class="brand-glyph">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+            <path d="M2 17l10 5 10-5"></path>
+            <path d="M2 12l10 5 10-5"></path>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">MAI INVESTIGATOR</span>
+          <span class="brand-subtitle">Connected Incident Intelligence</span>
+        </div>
+      </div>
+
+      <div class="sidebar-section-title">PRIMARY WORKSPACE</div>
+      <nav class="sidebar-nav">
+        <button id="nav-btn-investigate" class="sidebar-nav-item active" onclick="switchView('investigate')">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </span>
+          <span class="nav-label">Investigate</span>
+          <span class="nav-badge" id="nav-badge-agent">AGENT</span>
+        </button>
+
+        <button id="nav-btn-repositories" class="sidebar-nav-item" onclick="switchView('repositories')">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+          </span>
+          <span class="nav-label">Repositories</span>
+          <span class="nav-count" id="nav-repo-count">1</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-section-title" style="margin-top: 24px;">DIAGNOSTICS &amp; UTILITIES</div>
+      <nav class="sidebar-nav">
+        <button id="nav-btn-devtools" class="sidebar-nav-item" onclick="switchView('devtools')">
+          <span class="nav-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+          </span>
+          <span class="nav-label">Developer &amp; Demo Tools</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-spacer"></div>
+
+      <!-- Tenant & Engine Info Card -->
+      <div class="sidebar-footer">
+        <div class="tenant-card">
+          <div class="tenant-header">
+            <span class="tenant-label">ACTIVE TENANT</span>
+            <button class="tenant-switch-btn" title="Switch isolated tenant context" onclick="toggleUserIsolation()">Switch</button>
+          </div>
+          <div class="tenant-id" id="current-user-display">user_alex_rivera_demo</div>
+        </div>
+
+        <div class="system-status-box" id="falkordb-status">
+          <span id="falkordb-dot" class="pulse-dot"></span>
+          <span id="falkordb-status-text" class="status-text">Checking FalkorDB...</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Workspace Viewport -->
+    <main class="app-main">
+      <!-- Top Workspace Header -->
+      <header class="workspace-header">
+        <div class="header-breadcrumb">
+          <span class="breadcrumb-root">Engineering Investigation</span>
+          <span class="breadcrumb-sep">/</span>
+          <span class="breadcrumb-current" id="header-view-title">Investigate Incident</span>
+        </div>
+
+        <div class="header-meta-group">
+          <div class="header-meta-pill" id="header-repo-pill" title="Target Repository Context">
+            <span class="pill-dot"></span>
+            <span class="pill-text" id="header-repo-text">Repo: gateway-corp/gateway-api</span>
+          </div>
+
+          <div class="header-meta-pill agent-pill" id="header-mode-pill" title="Agent Reasoner Status">
+            <span class="pill-badge">MODE</span>
+            <span class="pill-text" id="header-mode-text">Autonomous Agent (gemini-3.8-flash)</span>
+          </div>
+
+          <button id="btn-switch-user" class="btn btn-secondary btn-sm" onclick="toggleUserIsolation()" title="Switch active isolated user">
+            👤 Switch Tenant
+          </button>
+        </div>
+      </header>
+
+      <!-- Scrollable Content Canvas -->
+      <div class="workspace-content">
+
+        <!-- ================================================================= -->
+        <!-- VIEW 1: MAIN INVESTIGATE WORKSPACE (DEFAULT)                      -->
+        <!-- ================================================================= -->
+        <section id="page-investigate" class="workspace-page active">
+          
+          <!-- Quick Demo Shortcut Bar (Judge-Friendly) -->
+          <div class="demo-quick-strip">
+            <div class="demo-quick-info">
+              <span class="quick-title">⚡ Hackathon Evaluation Demos:</span>
+              <span class="quick-desc">Seed pre-configured incidents with historical failed fixes and multi-hop code traces.</span>
+            </div>
+            <div class="demo-quick-actions">
+              <button id="btn-run-incident-demo" class="btn btn-primary btn-sm" onclick="runIncidentDemo()">
+                ⚡ Load Gateway Incident Demo
+              </button>
+              <button id="btn-run-github-demo" class="btn btn-secondary btn-sm" onclick="runGitHubDemo()">
+                🐙 Load GitHub PR/CI Memory Demo
+              </button>
+            </div>
+          </div>
+          <div id="incident-demo-status" class="demo-action-status"></div>
+
+          <!-- Incident Input Panel -->
+          <div class="panel incident-intake-panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Active Incident Intake &amp; Diagnosis</h2>
+                <p class="panel-subtitle">
+                  Describe the observed technical symptoms or alert telemetry. The AI agent dynamically traverses FalkorDB incident memory, verifies previously attempted fixes, and pulls relevant GitHub pull requests, commits, and CI runs.
+                </p>
+              </div>
+              <div class="panel-tag">BOUNDED AGENTIC REASONING</div>
+            </div>
+
+            <div class="incident-form-grid">
+              <!-- Symptoms Input (Multiline Textarea) -->
+              <div class="form-field full-width">
+                <label for="input-incident-symptoms" class="field-label">
+                  Observed Symptoms / Incident Alert Telemetry <span class="required">*</span>
+                </label>
+                <textarea 
+                  id="input-incident-symptoms" 
+                  class="field-textarea" 
+                  rows="3" 
+                  placeholder="e.g. Tail timeout alerts and slow gateway response during peak traffic (p99 latency degradation above 120ms)"
+                >Tail timeout alerts and slow gateway response during peak traffic</textarea>
+              </div>
+
+              <!-- Component Input -->
+              <div class="form-field">
+                <label for="input-incident-component" class="field-label">Affected Component / Service</label>
+                <input 
+                  type="text" 
+                  id="input-incident-component" 
+                  class="field-input" 
+                  placeholder="e.g. gateway-api" 
+                  value="gateway-api"
+                />
+              </div>
+
+              <!-- Repository Selector (Dynamically populated from connected repos) -->
+              <div class="form-field">
+                <label for="input-incident-repo-select" class="field-label">Repository Scope (Optional)</label>
+                <select id="input-incident-repo-select" class="field-select" onchange="onRepositorySelectChange(this.value)">
+                  <option value="">All Connected Repositories</option>
+                  <option value="gateway-corp/gateway-api" selected>gateway-corp/gateway-api</option>
+                </select>
+              </div>
+
+              <!-- Mode Toggle -->
+              <div class="form-field agent-toggle-field">
+                <label class="field-label">Execution Strategy</label>
+                <label class="toggle-control" title="Enables the multi-turn agent tool loop using Google Gemini API">
+                  <input type="checkbox" id="input-incident-prefer-agent" checked />
+                  <span class="toggle-slider"></span>
+                  <span class="toggle-label">Autonomous Agent Tool Loop (max 3 turns)</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Preset Queries (Clearly labeled as examples) -->
+            <div class="preset-strip">
+              <span class="preset-label">Example Incident Scenarios:</span>
+              <button type="button" class="preset-pill" onclick="setIncidentPreset('Tail timeout alerts and slow gateway response during peak traffic', 'gateway-api')">
+                Gateway Timeout Alerts
+              </button>
+              <button type="button" class="preset-pill" onclick="setIncidentPreset('Database connection pool exhaustion p99 latency 120ms', 'gateway-api')">
+                Connection Pool Exhaustion
+              </button>
+              <button type="button" class="preset-pill" onclick="setIncidentPreset('CI workflow run failure after merge in gateway-api', 'gateway-api')">
+                CI Pipeline Failure
+              </button>
+              <button type="button" class="preset-pill" onclick="setIncidentPreset('Quantum optical phase decoherence in superconducting qubit array', 'quantum-array')">
+                Quantum Decoherence (Zero-Evidence Abstention)
+              </button>
+            </div>
+
+            <!-- Action Trigger -->
+            <div class="panel-action-bar">
+              <button id="btn-investigate-incident" data-legacy-id="btn-query-incident" class="btn btn-primary btn-lg" onclick="queryIncidentInvestigation()">
+                <span class="btn-icon">🔍</span>
+                <span>Investigate Incident</span>
+              </button>
+              <div class="action-note">
+                Reads historical incident graphs and repository artifacts in FalkorDB with strict tenant isolation.
+              </div>
+            </div>
+          </div>
+
+          <!-- Loading State -->
+          <div id="incident-loading" class="state-panel loading-panel" style="display: none;">
+            <div class="spinner-large"></div>
+            <div class="loading-title">Investigating Incident via FalkorDB &amp; Agent Loop...</div>
+            <p class="loading-desc">
+              Retrieving historical incident nodes, checking previous fix attempt outcomes, querying GitHub PR/CI artifacts, and executing bounded reasoning tools.
+            </p>
+          </div>
+
+          <!-- Investigation Results Container -->
+          <div id="incident-results-container" style="display: none;">
+            
+            <!-- No Historical Evidence Panel -->
+            <div id="incident-no-evidence" class="state-panel no-evidence-panel" style="display: none;">
+              <div class="state-icon">⚠️</div>
+              <div class="state-title">No Historical Evidence Found</div>
+              <p id="incident-no-evidence-text" class="state-desc"></p>
+              <div class="state-footer">
+                The investigator abstained from speculating because no supporting nodes or causal paths exist in this tenant's graph. Zero hallucinations generated.
+              </div>
+            </div>
+
+            <!-- Evidence-Backed Results Hierarchy -->
+            <div id="incident-evidence-panel" style="display: none;">
+
+              <!-- 1. ASSESSMENT & RECOMMENDATION SUMMARY STRIP -->
+              <section class="results-section" aria-label="Investigation Assessment">
+                <div class="section-badge-bar">
+                  <span class="section-step-num">1. ASSESSMENT</span>
+                  <span class="section-step-title">Evidence-Grounded Findings &amp; Recommended Next Action</span>
+                </div>
+                <div id="investigation-summary-strip"></div>
+              </section>
+
+              <!-- 2. INTERACTIVE EVIDENCE KNOWLEDGE GRAPH -->
+              <section class="results-section" aria-label="Evidence Knowledge Graph">
+                <div class="section-badge-bar">
+                  <span class="section-step-num">2. EVIDENCE GRAPH</span>
+                  <span class="section-step-title">Interactive Causal Topology (Cytoscape.js)</span>
+                </div>
+
+                <div id="investigation-graph-card" class="graph-card">
+                  <div class="graph-toolbar">
+                    <div class="graph-toolbar-info">
+                      <span class="graph-title">Topology &amp; Evidence Provenance</span>
+                      <span class="graph-hint">Click any node to inspect diagnostic details and GitHub source links</span>
+                    </div>
+                    <div class="graph-btn-group">
+                      <button class="btn btn-secondary btn-xs" onclick="graphZoomIn()" title="Zoom In">➕ Zoom In</button>
+                      <button class="btn btn-secondary btn-xs" onclick="graphZoomOut()" title="Zoom Out">➖ Zoom Out</button>
+                      <button class="btn btn-secondary btn-xs" onclick="graphFitView()" title="Fit to View">🎯 Fit View</button>
+                      <button class="btn btn-secondary btn-xs" onclick="graphResetLayout()" title="Recompute Deterministic 2-Tier Layout">🔄 Re-Layout</button>
+                    </div>
+                  </div>
+
+                  <!-- Legend of Verified Graph Types -->
+                  <div class="graph-legend">
+                    <span class="legend-item"><span class="legend-dot dot-incident"></span>Incident</span>
+                    <span class="legend-item"><span class="legend-dot dot-hypothesis"></span>Hypothesis</span>
+                    <span class="legend-item"><span class="legend-dot dot-fix"></span>Fix Attempt</span>
+                    <span class="legend-item"><span class="legend-dot dot-outcome"></span>Unsuccessful Outcome</span>
+                    <span class="legend-item"><span class="legend-dot dot-next"></span>Next Action</span>
+                    <span class="legend-item"><span class="legend-dot dot-repo"></span>Repository</span>
+                    <span class="legend-item"><span class="legend-dot dot-pr"></span>Pull Request</span>
+                    <span class="legend-item"><span class="legend-dot dot-issue"></span>Issue</span>
+                    <span class="legend-item"><span class="legend-dot dot-commit"></span>Commit</span>
+                    <span class="legend-item"><span class="legend-dot dot-workflow"></span>Workflow Run</span>
+                  </div>
+
+                  <!-- Cytoscape Canvas Container -->
+                  <div id="incident-cytoscape-container"></div>
+
+                  <!-- Node Inspector Drawer (Click-to-Inspect) -->
+                  <div id="graph-node-details-panel" class="node-inspector-drawer">
+                    <div class="node-inspector-header">
+                      <span id="node-inspector-type" class="gh-type-tag">NODE</span>
+                      <button onclick="document.getElementById('graph-node-details-panel').style.display='none'" class="btn-close-inspector" aria-label="Close Inspector">✕</button>
+                    </div>
+                    <div id="node-inspector-title" class="node-inspector-title"></div>
+                    <div id="node-inspector-body" class="node-inspector-body"></div>
+                    <div id="node-inspector-link" class="node-inspector-link"></div>
+                  </div>
+                </div>
+
+                <!-- Collapsible Technical Cypher Traversal Paths -->
+                <details class="tech-details-accordion">
+                  <summary class="accordion-summary">
+                    <span>📜 View Raw Cypher Multi-Hop Graph Traversal Paths</span>
+                    <span class="accordion-toggle-icon">▼</span>
+                  </summary>
+                  <div class="path-box" id="incident-path-box">
+                    <div id="incident-path-list"></div>
+                  </div>
+                </details>
+              </section>
+
+              <!-- 3. PREVIOUS ATTEMPTS & CONNECTED REPOSITORY EVIDENCE -->
+              <section class="results-section" aria-label="Evidence & Previous Attempts">
+                <div class="section-badge-bar">
+                  <span class="section-step-num">3. CONNECTED EVIDENCE</span>
+                  <span class="section-step-title">Prior Fix Attempts, Measured Outcomes &amp; Code History</span>
+                </div>
+
+                <div class="evidence-dual-grid">
+                  <!-- Prior Fix Attempts & Measured Outcomes -->
+                  <div class="evidence-card">
+                    <div class="evidence-card-header failure-border">
+                      <span class="evidence-card-title">⚠️ Prior Interventions &amp; Measured Outcomes</span>
+                      <span class="evidence-card-badge">FalkorDB Verified</span>
+                    </div>
+                    <p class="evidence-card-desc">
+                      Past remediation attempts evaluated by before/after metrics. Unsuccessful interventions are explicitly flagged to avoid repetitive loops.
+                    </p>
+                    <div id="list-prior-fixes" class="evidence-items-list"></div>
+                  </div>
+
+                  <!-- Applicable Goals & System Constraints -->
+                  <div class="evidence-card">
+                    <div class="evidence-card-header info-border">
+                      <span class="evidence-card-title">🎯 Active Goals &amp; Latency Constraints</span>
+                      <span class="evidence-card-badge">Current vs Superseded</span>
+                    </div>
+                    <p class="evidence-card-desc">
+                      Performance targets and SLA boundaries. Verifies whether previous interventions met active criteria.
+                    </p>
+                    <div id="list-incident-goals" class="evidence-items-list"></div>
+                  </div>
+                </div>
+
+                <!-- Connected GitHub Engineering Records -->
+                <div id="incident-github-records-container" class="github-evidence-panel" style="display: none; margin-top: 16px;">
+                  <div class="github-evidence-header">
+                    <div>
+                      <span class="github-evidence-title">🐙 Connected GitHub Engineering Records (PRs, Commits, CI Workflows)</span>
+                      <div class="github-evidence-sub">*Candidate code history retrieved from repository graph; verify before treating as root cause</div>
+                    </div>
+                  </div>
+                  <div id="incident-github-records-list" class="github-records-grid"></div>
+                </div>
+              </section>
+
+              <!-- 4. RECOMMENDED NEXT INVESTIGATION & CLOSED-LOOP TASK -->
+              <section class="results-section" aria-label="Recommended Next Investigation">
+                <div class="section-badge-bar">
+                  <span class="section-step-num">4. NEXT INVESTIGATION</span>
+                  <span class="section-step-title">Grounded Next Diagnostic Step &amp; Feedback Loop</span>
+                </div>
+
+                <!-- Recommendation Text Box -->
+                <div class="recommendation-callout">
+                  <div class="recommendation-header">
+                    <span class="rec-title">Evidence-Grounded Recommendation</span>
+                  </div>
+                  <p id="incident-recommendation-text" class="rec-body"></p>
+                  <div id="incident-uncertainty-box" class="uncertainty-box"></div>
+                </div>
+
+                <!-- Persisted Task Card with Measured Outcome Feedback -->
+                <div class="task-card" id="task-card" style="display: none;">
+                  <div class="task-header">
+                    <div>
+                      <div class="task-id-mono" id="task-id-display">Task: act_...</div>
+                      <div class="task-action-title" id="task-action-title"></div>
+                    </div>
+                    <span id="task-status-badge" class="task-badge pending">PENDING</span>
+                  </div>
+                  <p class="task-rationale" id="task-rationale"></p>
+
+                  <div class="task-actions-row">
+                    <span class="task-actions-label">Update Task Lifecycle:</span>
+                    <button class="btn btn-secondary btn-sm" onclick="updateIncidentTaskStatus('in_progress')">
+                      ⏳ Mark In Progress
+                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="updateIncidentTaskStatus('completed')">
+                      ✓ Mark Completed
+                    </button>
+                  </div>
+
+                  <!-- Close Feedback Loop Form -->
+                  <div class="outcome-feedback-form">
+                    <div class="outcome-form-title">
+                      <span>Record Measured Outcome (Closes Feedback Loop in FalkorDB)</span>
+                    </div>
+                    <p class="outcome-form-desc">
+                      Record empirical before/after measurements so future agent investigations learn from this intervention.
+                    </p>
+                    <div class="outcome-inputs-grid">
+                      <div class="form-field">
+                        <label for="out-input-metric" class="field-label-sm">Metric Key</label>
+                        <input type="text" id="out-input-metric" class="field-input" placeholder="e.g. p99_latency_ms" value="p99_latency_ms" />
+                      </div>
+                      <div class="form-field">
+                        <label for="out-input-before" class="field-label-sm">Before Value</label>
+                        <input type="text" id="out-input-before" class="field-input" placeholder="e.g. 118ms" value="118ms" />
+                      </div>
+                      <div class="form-field">
+                        <label for="out-input-after" class="field-label-sm">After Value</label>
+                        <input type="text" id="out-input-after" class="field-input" placeholder="e.g. 18ms" value="18ms" />
+                      </div>
+                      <div class="form-field">
+                        <label for="out-input-eval" class="field-label-sm">Evaluation</label>
+                        <select id="out-input-eval" class="field-select">
+                          <option value="successful">successful</option>
+                          <option value="unsuccessful">unsuccessful</option>
+                          <option value="inconclusive">inconclusive</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="form-field" style="margin-top: 10px;">
+                      <label for="out-input-notes" class="field-label-sm">Diagnostic Notes / Empirical Verification</label>
+                      <input type="text" id="out-input-notes" class="field-input" placeholder="Diagnostic notes / changes verified..." value="Added missing composite index on tokens table; verified query completion in 18ms." />
+                    </div>
+                    <div style="margin-top: 12px; display: flex; align-items: center; gap: 12px;">
+                      <button class="btn btn-primary btn-sm" onclick="recordTaskOutcome()">
+                        💾 Record Measured Outcome
+                      </button>
+                      <span id="outcome-feedback" class="ingest-feedback"></span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+            </div>
+          </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- VIEW 2: REPOSITORIES WORKSPACE                                    -->
+        <!-- ================================================================= -->
+        <section id="page-repositories" class="workspace-page" style="display: none;">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Connected Engineering Repositories</h2>
+                <p class="panel-subtitle">
+                  Inspect imported GitHub repositories, code artifacts, and multi-hop relationships stored in FalkorDB for the active tenant.
+                </p>
+              </div>
+              <button class="btn btn-secondary btn-sm" onclick="refreshGitHubStatus()">
+                ↻ Refresh Status
+              </button>
+            </div>
+
+            <!-- Import Repository Strip -->
+            <div class="repo-import-box">
+              <div class="repo-import-title">Import Repository into FalkorDB Graph</div>
+              <div class="repo-import-grid">
+                <input 
+                  type="text" 
+                  id="input-github-repo" 
+                  class="field-input" 
+                  placeholder="Repository (owner/repo or GitHub URL)..." 
+                  value="gateway-corp/gateway-api"
+                />
+                <input 
+                  type="password" 
+                  id="input-github-token" 
+                  class="field-input" 
+                  placeholder="Optional PAT (server-side only, not stored)"
+                />
+                <button id="btn-import-github" class="btn btn-primary" onclick="importGitHubRepo()">
+                  📥 Import Repo
+                </button>
+              </div>
+              <div class="repo-security-note">
+                🔒 <strong>Security Guarantee:</strong> Credentials are read securely server-side, never exposed to client logs, and never stored in the database.
+              </div>
+            </div>
+
+            <!-- Repositories List Container -->
+            <div id="github-status-container" style="margin-top: 20px;">
+              
+              <!-- Repositories List View -->
+              <div id="github-repos-list-view">
+                <div style="font-size: 0.8rem; font-weight: 700; color: #cbd5e1; text-transform: uppercase; margin-bottom: 12px;">
+                  Imported Repositories in FalkorDB (Tenant-Scoped):
+                </div>
+                <div id="github-repos-list" class="repos-grid">
+                  <div class="empty-state-card">Loading connected repositories...</div>
+                </div>
+              </div>
+
+              <!-- In-App Repository Drilldown Details View -->
+              <div id="github-repo-details-view" style="display: none;" class="repo-drilldown-panel">
+                <div class="repo-drilldown-header">
+                  <button id="btn-back-to-repos" class="btn btn-secondary btn-sm" onclick="backToReposList()">
+                    ← Back to Repositories
+                  </button>
+                  <div style="display: flex; gap: 8px; align-items: center;">
+                    <span id="repo-details-badge-branch" class="badge-tag">main</span>
+                    <a id="repo-details-external-url" href="#" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="color: #38bdf8;">
+                      ↗ Open on GitHub
+                    </a>
+                  </div>
+                </div>
+
+                <div id="repo-details-loading" style="display: none; padding: 24px; text-align: center;">
+                  <div class="spinner-large"></div>
+                  <p style="margin-top: 10px; color: #94a3b8; font-size: 0.85rem;">Loading repository graph &amp; engineering records...</p>
+                </div>
+
+                <div id="repo-details-error" class="state-panel failure-panel" style="display: none;"></div>
+
+                <div id="repo-details-content" style="display: none;">
+                  <div style="margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                      <h3 id="repo-details-title" style="margin: 0; font-size: 1.25rem; color: #f8fafc;"></h3>
+                      <span id="repo-details-id-tag" class="mono-badge"></span>
+                    </div>
+                    <p id="repo-details-desc" style="font-size: 0.85rem; color: #cbd5e1; margin-top: 6px;"></p>
+                    <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 4px;">
+                      Imported at: <span id="repo-details-imported-at" class="mono-text"></span>
+                    </div>
+                  </div>
+
+                  <!-- Summary Counters -->
+                  <div class="repo-stats-grid">
+                    <div class="repo-stat-card">
+                      <div class="stat-label">📋 Issues</div>
+                      <div class="stat-value" id="repo-count-issues">0</div>
+                    </div>
+                    <div class="repo-stat-card">
+                      <div class="stat-label">🔀 Pull Requests</div>
+                      <div class="stat-value" id="repo-count-prs">0</div>
+                    </div>
+                    <div class="repo-stat-card">
+                      <div class="stat-label">💻 Commits</div>
+                      <div class="stat-value" id="repo-count-commits">0</div>
+                    </div>
+                    <div class="repo-stat-card">
+                      <div class="stat-label">⚙️ Workflow Runs</div>
+                      <div class="stat-value" id="repo-count-workflows">0</div>
+                    </div>
+                  </div>
+
+                  <!-- Stored Graph Relationships -->
+                  <div class="repo-graph-box">
+                    <div class="repo-graph-title">🔗 Stored Graph Relationships &amp; Causal Traces</div>
+                    <div style="margin-bottom: 12px;">
+                      <div class="sub-title">Multi-Hop Causal Paths:</div>
+                      <div id="repo-details-multihop-list" class="paths-list"></div>
+                    </div>
+                    <div style="margin-bottom: 12px;">
+                      <div class="sub-title success-color">✓ Verified Relationships (<span id="repo-details-verified-count">0</span>):</div>
+                      <div id="repo-details-verified-list" class="relationships-list"></div>
+                    </div>
+                    <div>
+                      <div class="sub-title warning-color">⚠️ Unlinked / Missing Relationships (<span id="repo-details-missing-count">0</span>):</div>
+                      <div id="repo-details-missing-list" class="relationships-list"></div>
+                    </div>
+                  </div>
+
+                  <!-- 4 Record Categories -->
+                  <div class="records-columns-grid">
+                    <div>
+                      <div class="record-col-header">
+                        🔀 Pull Requests (<span id="repo-details-prs-title-count">0</span>)
+                      </div>
+                      <div id="repo-details-prs-list" class="records-list"></div>
+                    </div>
+                    <div>
+                      <div class="record-col-header">
+                        📋 Issues (<span id="repo-details-issues-title-count">0</span>)
+                      </div>
+                      <div id="repo-details-issues-list" class="records-list"></div>
+                    </div>
+                    <div>
+                      <div class="record-col-header">
+                        💻 Commits (<span id="repo-details-commits-title-count">0</span>)
+                      </div>
+                      <div id="repo-details-commits-list" class="records-list"></div>
+                    </div>
+                    <div>
+                      <div class="record-col-header">
+                        ⚙️ Workflow Runs (<span id="repo-details-workflows-title-count">0</span>)
+                      </div>
+                      <div id="repo-details-workflows-list" class="records-list"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- VIEW 3: DEVELOPER & DEMO TOOLS (RELOCATED FROM MAIN WORKSPACE)    -->
+        <!-- ================================================================= -->
+        <section id="page-devtools" class="workspace-page" style="display: none;">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Developer &amp; Demo Tools</h2>
+                <p class="panel-subtitle">
+                  Diagnostics, synthetic benchmark scenarios, natural language extraction, and baseline evaluation utilities.
+                </p>
+              </div>
+              <span class="badge-tag">SECONDARY CONTROLS</span>
+            </div>
+
+            <!-- Utility Tabs or Accordions -->
+            <div class="devtools-sections">
+              
+              <!-- Section A: Synthetic Demo Scenario & Deduplication Invariants -->
+              <div class="devtool-card" id="section-scenario">
+                <div class="devtool-header">
+                  <div class="devtool-title">
+                    <span>1. Synthetic Demo Scenario &amp; Deduplication Test</span>
+                    <span class="badge-tag">Synthetic Dataset</span>
+                  </div>
+                  <div class="btn-group">
+                    <button id="btn-ingest-scenario" class="btn btn-primary btn-sm" onclick="ingestDemoScenario()">
+                      ⚡ Ingest Scenario (Mode A)
+                    </button>
+                    <button id="btn-test-dedup" class="btn btn-secondary btn-sm" onclick="testDeduplication()">
+                      🔄 Test Deduplication Invariant
+                    </button>
+                  </div>
+                </div>
+
+                <p class="scenario-desc">
+                  <strong>Fictional Dev Alex Rivera (Synthetic Scenario):</strong> Setting a goal to minimize AI assistant reasoning retrieval latency.
+                  Adopts <em>FalkorDB multi-hop Cypher traversal</em> informed by illustrative <em>GraphBLAS benchmark notes</em>.
+                  <span class="badge-tag">Synthetic Illustrative Data — Not an Actual Benchmark Measurement</span>
+                </p>
+
+                <div class="scenario-chain">
+                  <span class="chain-node">Goal: Reduce Latency</span>
+                  <span class="chain-arrow">──[MOTIVATES]──►</span>
+                  <span class="chain-node">Decision: Adopt FalkorDB Cypher</span>
+                  <span class="chain-arrow">──[INFORMED_BY]──►</span>
+                  <span class="chain-node">Experience: Illustrative Target 14ms (Synthetic)</span>
+                </div>
+
+                <div id="ingest-feedback" class="ingest-feedback"></div>
+              </div>
+
+              <!-- Section B: Real Memory Extraction from Natural Conversation -->
+              <div class="devtool-card" id="section-gemini-extraction">
+                <div class="devtool-header">
+                  <div class="devtool-title">
+                    <span>2. Real Memory Extraction from Natural Conversation</span>
+                    <span class="badge-tag agent-tag">Google Gemini API (gemini-3.8-flash)</span>
+                  </div>
+                  <button id="btn-extract-gemini" class="btn btn-primary btn-sm" onclick="ingestNaturalLanguageConversation()">
+                    ✨ Extract &amp; Ingest with Gemini
+                  </button>
+                </div>
+
+                <p class="scenario-desc">
+                  Submit unstructured developer or agent dialogue. Google Gemini (<code>gemini-3.8-flash</code>) extracts grounded facts, goals, decisions, experiences, and typed relationships into FalkorDB without hallucination.
+                </p>
+
+                <textarea 
+                  id="input-conversation" 
+                  class="field-textarea" 
+                  rows="3" 
+                  placeholder="Paste or type natural developer or agent conversation here..."
+                >During our sprint architecture review, we set a high-priority goal to reduce agent memory lookup latency below 20ms. We decided to adopt FalkorDB with GraphBLAS sparse matrix algorithms because it enables direct multi-hop relationship traversals without combinatorial vector joins. In our internal benchmark, we verified query completion in 16ms.</textarea>
+
+                <div class="preset-strip" style="margin-top: 8px;">
+                  <span class="preset-label">Sample Conversations:</span>
+                  <button type="button" class="preset-pill" onclick="setConversationSample('falkordb')">FalkorDB Architecture</button>
+                  <button type="button" class="preset-pill" onclick="setConversationSample('contradiction')">Contradictory / Updated Memory</button>
+                  <button type="button" class="preset-pill" onclick="setConversationSample('chatter')">Irrelevant Chatter (Factual Guardrails)</button>
+                </div>
+
+                <div id="gemini-loading" class="state-panel loading-panel" style="display: none; padding: 14px; margin-top: 10px;">
+                  <div class="spinner-small"></div>
+                  <span style="font-size: 0.82rem; color: #cbd5e1; margin-left: 10px;">
+                    Calling Google Gemini API for structured extraction &amp; storing into FalkorDB...
+                  </span>
+                </div>
+
+                <div id="gemini-error" class="gemini-error-box" style="display: none; margin-top: 10px;">
+                  <div class="error-title" id="gemini-error-title">⚠️ Extraction Failed</div>
+                  <div class="error-message" id="gemini-error-message"></div>
+                  <div class="error-action" id="gemini-error-action" style="font-size: 0.8rem; margin-top: 6px; color: #fca5a5;"></div>
+                </div>
+
+                <div id="gemini-feedback" class="ingest-feedback" style="margin-top: 10px;"></div>
+
+                <div id="gemini-extracted-preview" class="extracted-preview-box" style="display: none; margin-top: 10px;">
+                  <div class="extracted-title">Extracted Grounded Facts &amp; Relationships:</div>
+                  <div class="extracted-grid" id="gemini-extracted-grid"></div>
+                </div>
+              </div>
+
+              <!-- Section C: Temporal Memory & Conflict Resolution Demo -->
+              <div class="devtool-card" id="section-conflict-demo">
+                <div class="devtool-header">
+                  <div class="devtool-title">
+                    <span>3. Temporal Memory, Conflict Detection &amp; Evidence Preservation</span>
+                    <span class="badge-tag">Deterministic Engine</span>
+                  </div>
+                  <button id="btn-run-conflict-demo" class="btn btn-primary btn-sm" onclick="runConflictDemo()">
+                    ⚡ Run 3-Statement Conflict Demo
+                  </button>
+                </div>
+
+                <p class="scenario-desc">
+                  Demonstrates deterministic handling of updates vs. contradictions without deleting evidence:
+                  (1) Initial target latency &lt; 30 ms ➔ (2) Changed target to &lt; 20 ms (SUPERSEDES goal update) ➔ (3) Benchmark measured 24 ms (Target mismatch empirical observation).
+                </p>
+                <div id="conflict-demo-status" style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 10px;">
+                  Deterministic synthetic scenario for user <code>user_alex_temporal_demo</code>
+                </div>
+
+                <div id="conflict-scenario-container" style="display: none;">
+                  <div id="conflict-steps-list" style="margin-bottom: 12px;"></div>
+                  <div id="conflict-cards-list"></div>
+                  <div class="summary-box" style="margin-top: 12px;">
+                    <div class="summary-title">Evidence-Grounded Synthesis</div>
+                    <p id="conflict-analysis-text" class="summary-text" style="font-size: 0.85rem;"></p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Section D: Contextual Graph Query Box -->
+              <div class="devtool-card" id="section-query">
+                <div class="devtool-header">
+                  <div class="devtool-title">4. Contextual Developer Memory Query</div>
+                  <div class="metrics-strip" id="metrics-strip" style="display: none;">
+                    <div class="metric-pill">Latency: <span id="metric-latency">0 ms</span></div>
+                    <div class="metric-pill">Evidence: <span id="metric-count">0</span></div>
+                    <div class="metric-pill">User: <span id="metric-user">user_alex_rivera_demo</span></div>
+                  </div>
+                </div>
+
+                <div class="query-input-wrap">
+                  <input 
+                    type="text" 
+                    id="input-query" 
+                    class="field-input" 
+                    placeholder="Ask a question about goals, decisions, or experiences..." 
+                    value="What decisions were taken to reduce reasoning response latency for the assistant?"
+                    onkeydown="if(event.key==='Enter') executeContextQuery()"
+                  />
+                  <button id="btn-execute-query" class="btn btn-primary btn-sm" onclick="executeContextQuery()">
+                    <span id="btn-query-text">🔍 Retrieve Context</span>
+                  </button>
+                </div>
+
+                <div class="preset-strip" style="margin-top: 8px;">
+                  <span class="preset-label">Example Queries:</span>
+                  <button type="button" class="preset-pill" onclick="setPresetQuery('What decisions were taken to reduce reasoning response latency for the assistant?')">Decisions for Latency Goal</button>
+                  <button type="button" class="preset-pill" onclick="setPresetQuery('What technology or database engine was evaluated?')">Technologies Evaluated</button>
+                  <button type="button" class="preset-pill" onclick="setPresetQuery('Cryogenic superconductor quantum teleportation')">Unrelated (Zero Hallucination)</button>
+                </div>
+
+                <!-- Query Results -->
+                <div id="state-loading" class="state-panel loading-panel" style="display: none; padding: 14px; margin-top: 10px;">
+                  <div class="spinner-small"></div>
+                  <span style="font-size: 0.82rem; color: #cbd5e1; margin-left: 10px;">Querying FalkorDB multi-hop reasoning graph...</span>
+                </div>
+
+                <div id="state-no-evidence" class="state-panel no-evidence-panel" style="display: none; padding: 14px; margin-top: 10px;">
+                  <strong>No Supporting Evidence Found</strong>
+                  <p id="no-evidence-detail" style="margin-top: 4px; font-size: 0.8rem;">
+                    No causal memory paths match this query in the user's isolated graph.
+                  </p>
+                </div>
+
+                <div id="results-container" style="display: none; margin-top: 12px;">
+                  <div class="path-box" id="path-box">
+                    <div class="path-box-title">🔗 Causal Evidence Traversal Paths:</div>
+                    <div id="path-list"></div>
+                  </div>
+
+                  <div class="conflict-panel" id="conflict-panel" style="display: none; margin-top: 10px;">
+                    <div class="conflict-panel-title">
+                      <span>⚠️ Temporal Conflict &amp; Claim History Detected</span>
+                      <span id="conflict-badge-count" class="badge-tag">0</span>
+                    </div>
+                    <div id="conflict-cards-container"></div>
+                  </div>
+
+                  <div class="summary-box" style="margin-top: 10px;">
+                    <div class="summary-title">Evidence-Backed Context Summary</div>
+                    <p id="summary-text" class="summary-text"></p>
+                  </div>
+
+                  <div class="nodes-grid" style="margin-top: 10px;">
+                    <div class="node-column" id="col-goals">
+                      <div class="node-column-header goal"><span>🎯 Goals</span><span id="badge-goals-count" class="badge-tag">0</span></div>
+                      <div id="list-goals"></div>
+                    </div>
+                    <div class="node-column" id="col-decisions">
+                      <div class="node-column-header decision"><span>💡 Decisions</span><span id="badge-decisions-count" class="badge-tag">0</span></div>
+                      <div id="list-decisions"></div>
+                    </div>
+                    <div class="node-column" id="col-experiences">
+                      <div class="node-column-header experience"><span>🧪 Experiences</span><span id="badge-experiences-count" class="badge-tag">0</span></div>
+                      <div id="list-experiences"></div>
+                    </div>
+                    <div class="node-column" id="col-memories">
+                      <div class="node-column-header memory"><span>📝 Memories</span><span id="badge-memories-count" class="badge-tag">0</span></div>
+                      <div id="list-memories"></div>
+                    </div>
+                    <div class="node-column" id="col-entities">
+                      <div class="node-column-header entity"><span>🏷️ Entities</span><span id="badge-entities-count" class="badge-tag">0</span></div>
+                      <div id="list-entities"></div>
+                    </div>
+                  </div>
+
+                  <div style="margin-top: 10px;">
+                    <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 4px;">Provenance Verification Traces:</div>
+                    <div id="provenance-strip" class="provenance-strip"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Section E: Side-by-Side Baseline Comparison -->
+              <div class="devtool-card comparison-card" id="section-comparison">
+                <div class="devtool-header">
+                  <div class="devtool-title">
+                    <span>5. Evaluation: FalkorDB Graph Traversal vs. Fair Keyword Baseline</span>
+                    <span class="badge-tag">Synthetic Benchmark Evaluation</span>
+                  </div>
+                  <button id="btn-compare-baseline" class="btn btn-secondary btn-sm" onclick="runBaselineComparison()">
+                    ⚖️ Run Live Baseline Comparison
+                  </button>
+                </div>
+                <p style="font-size: 0.82rem; color: #cbd5e1; margin-bottom: 10px;" id="comparison-summary">
+                  Comparing multi-hop relationship retrieval against flat keyword searching across the same dataset in FalkorDB.
+                </p>
+
+                <table class="comparison-table">
+                  <thead>
+                    <tr>
+                      <th>Dimension</th>
+                      <th>FalkorDB Graph Traversal</th>
+                      <th>Flat Keyword Baseline</th>
+                      <th>Analysis</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><strong>Causal Recall</strong></td>
+                      <td class="highlight" id="comp-g-recall">-</td>
+                      <td id="comp-b-recall">-</td>
+                      <td>Graph traverses Goal ➔ Decision ➔ Experience</td>
+                    </tr>
+                    <tr>
+                      <td><strong>Found Decision?</strong></td>
+                      <td id="comp-g-dec">-</td>
+                      <td id="comp-b-dec">-</td>
+                      <td>Keyword search lacked relational link</td>
+                    </tr>
+                    <tr>
+                      <td><strong>Found Experience?</strong></td>
+                      <td id="comp-g-exp">-</td>
+                      <td id="comp-b-exp">-</td>
+                      <td>Query words differed from experience words</td>
+                    </tr>
+                    <tr>
+                      <td><strong>Explainable Path?</strong></td>
+                      <td id="comp-g-path">-</td>
+                      <td id="comp-b-path">-</td>
+                      <td>Keyword search has zero relationship awareness</td>
+                    </tr>
+                    <tr>
+                      <td><strong>Query Latency</strong></td>
+                      <td id="comp-g-lat">-</td>
+                      <td id="comp-b-lat">-</td>
+                      <td>Evaluated live on FalkorDB</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
