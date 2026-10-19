@@ -1,4 +1,5 @@
 from typing import Optional
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,8 +10,17 @@ class Settings(BaseSettings):
     falkordb_host: str = "127.0.0.1"
     falkordb_port: int = 6379
     falkordb_graph: str = "mai_agent_memory"
+    falkordb_username: Optional[str] = None
     falkordb_password: Optional[str] = None
+    falkordb_ssl: bool = False
     falkordb_timeout_sec: float = 2.0
+
+    @field_validator("falkordb_username", "falkordb_password", mode="before")
+    @classmethod
+    def empty_str_to_none(cls, v: Optional[str]) -> Optional[str]:
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
     # Application Configuration
     app_host: str = "127.0.0.1"

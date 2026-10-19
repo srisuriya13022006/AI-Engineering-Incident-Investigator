@@ -20,25 +20,41 @@ def get_falkordb_client(
     port: Optional[int] = None,
     password: Optional[str] = None,
     timeout_sec: Optional[float] = None,
+    username: Optional[str] = None,
+    ssl: Optional[bool] = None,
 ) -> FalkorDB:
     """Instantiate a FalkorDB client with configured connection parameters."""
     target_host = host or settings.falkordb_host
     target_port = port or settings.falkordb_port
+    target_username = username if username is not None else settings.falkordb_username
     target_password = password if password is not None else settings.falkordb_password
+    target_ssl = ssl if ssl is not None else settings.falkordb_ssl
     target_timeout = timeout_sec or settings.falkordb_timeout_sec
+
+    # Normalize empty or whitespace-only strings to None
+    if isinstance(target_username, str) and not target_username.strip():
+        target_username = None
+    if isinstance(target_password, str) and not target_password.strip():
+        target_password = None
 
     try:
         client = FalkorDB(
             host=target_host,
             port=target_port,
+            username=target_username,
             password=target_password,
+            ssl=target_ssl,
             socket_connect_timeout=target_timeout,
             socket_timeout=target_timeout,
         )
         return client
     except (RedisConnectionError, RedisTimeoutError, RedisError, OSError) as exc:
-        logger.error(f"Failed to connect to FalkorDB at {target_host}:{target_port} - {exc}")
-        raise FalkorDBConnectionError(f"Cannot connect to FalkorDB at {target_host}:{target_port}: {exc}") from exc
+        logger.error(
+            f"Failed to connect to FalkorDB at {target_host}:{target_port} (ssl={target_ssl}) - {exc}"
+        )
+        raise FalkorDBConnectionError(
+            f"Cannot connect to FalkorDB at {target_host}:{target_port}: {exc}"
+        ) from exc
 
 
 def get_graph_client(
@@ -57,12 +73,21 @@ def get_graph_client(
 def check_connection(
     host: Optional[str] = None,
     port: Optional[int] = None,
+    username: Optional[str] = None,
+    password: Optional[str] = None,
+    ssl: Optional[bool] = None,
 ) -> Tuple[bool, Optional[str]]:
     """Test connectivity to the FalkorDB instance."""
     target_host = host or settings.falkordb_host
     target_port = port or settings.falkordb_port
     try:
-        client = get_falkordb_client(host=target_host, port=target_port)
+        client = get_falkordb_client(
+            host=target_host,
+            port=target_port,
+            username=username,
+            password=password,
+            ssl=ssl,
+        )
         # Execute quick probe to verify engine responsiveness
         client.connection.ping()
         return True, None
